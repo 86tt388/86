@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>霍兰德职业兴趣测评</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --main:#e6f4ff;
+  --primary:#4096ff;
+  --dark:#1f5499;
+}
+*{box-sizing:border-box}
+body{background-color:var(--main);font-family:system-ui,sans-serif}
+.page{display:none;padding:20px;max-width:720px;margin:0 auto}
+.page.active{display:block}
+.option-item{transition:0.2s;cursor:pointer;border:1px solid #d0e7ff;border-radius:10px;padding:12px;margin:6px 0}
+.option-item:hover{background:#d0e7ff}
+.option-item.selected{background:var(--primary);color:white;border-color:var(--primary)}
+.progress-wrap{width:100%;height:10px;background:#d0e7ff;border-radius:99px;overflow:hidden;margin:16px 0}
+.progress-bar{height:100%;background:var(--primary);width:0%;transition:0.3s}
+.hex-box{position:relative;width:320px;height:320px;margin:24px auto}
+.tag{display:inline-block;background:#d0e7ff;color:#1f5499;padding:6px 10px;border-radius:99px;margin:4px;font-weight:500}
+.btn{background:var(--primary);color:white;border:none;padding:12px 20px;border-radius:10px;font-size:16px;cursor:pointer}
+.btn:disabled{background:#a0c8f8;cursor:not-allowed}
+</style>
+</head>
+<body>
+
+<!-- 首页 -->
+<div id="page-home" class="page active">
+  <div class="bg-white rounded-xl p-6 shadow-sm mt-8">
+    <h1 class="text-[22px] font-bold text-[#1f5499] text-center">霍兰德职业兴趣测评</h1>
+    <p class="text-gray-600 mt-4 text-sm">共60道职业活动偏好题目，6个维度：R现实型 / I研究型 / A艺术型 / S社会型 / E企业型 / C常规型<br>每题5级评分，请根据自身真实感受选择。</p>
+    <ul class="mt-4 text-sm text-gray-600">
+      <li>1分：非常不符合</li>
+      <li>2分：不太符合</li>
+      <li>3分：一般</li>
+      <li>4分：比较符合</li>
+      <li>5分：非常符合</li>
+    </ul>
+    <button class="btn w-full mt-6" onclick="startTest()">开始测评</button>
+  </div>
+</div>
+
+<!-- 答题页 -->
+<div id="page-question" class="page">
+  <div class="bg-white rounded-xl p-6 shadow-sm">
+    <div class="flex justify-between items-center">
+      <span class="font-medium">题目 <span id="q-index">1</span>/60</span>
+    </div>
+    <div class="progress-wrap">
+      <div id="progress" class="progress-bar"></div>
+    </div>
+    <h2 id="q-text" class="mt-4 text-lg min-h-[60px]"></h2>
+    <div id="q-options" class="mt-4"></div>
+    <div class="flex gap-3 mt-6">
+      <button class="btn flex-1" id="btn-next" disabled onclick="nextQuestion()">下一题</button>
+    </div>
+  </div>
+</div>
+
+<!-- 结果页 -->
+<div id="page-result" class="page">
+  <div class="bg-white rounded-xl p-6 shadow-sm">
+    <h2 class="text-xl font-bold text-[#1f5499] text-center">测评结果</h2>
+    <div class="hex-box">
+      <canvas id="hexChart"></canvas>
+    </div>
+    <div class="mt-4">
+      <h3 class="font-semibold">核心总结</h3>
+      <p id="result-summary" class="text-sm text-gray-700 mt-2"></p>
+    </div>
+    <div class="mt-4">
+      <h3 class="font-semibold">维度得分</h3>
+      <div id="score-tags" class="mt-2 grid grid-cols-2 gap-2"></div>
+    </div>
+    <div class="mt-4">
+      <h3 class="font-semibold">各维度特质解读与规划</h3>
+      <div id="dim-info" class="mt-2 text-sm text-gray-700 space-y-4"></div>
+    </div>
+    <button class="btn w-full mt-6" onclick="resetTest()">重新测评</button>
+  </div>
+</div>
+
+<script>
+// 60题 R/I/A/S/E/C 循环分配
+const questions = [
+// R现实
+"你喜欢动手修理设备、工具",
+"你愿意做户外实操类工作",
+"你喜欢组装机械、物件",
+"你擅长动手解决实物故障",
+"你喜欢操作机器、仪器",
+"你愿意从事体力实操任务",
+"你喜欢亲手制作物品",
+"你乐于调试硬件装置",
+"你喜欢园艺、手工劳作",
+"你偏好看得见成果的实操工作",
+// I研究
+"你喜欢探索事物原理",
+"你乐于阅读科普、理论资料",
+"你喜欢分析数据、寻找规律",
+"你愿意做实验验证猜想",
+"你喜欢思考抽象问题",
+"你乐于研究未知问题",
+"你喜欢搜集信息做分析",
+"你愿意钻研复杂理论",
+"你喜欢逻辑推理类任务",
+"你乐于探究现象背后原因",
+// A艺术
+"你喜欢绘画、音乐、文学等创作",
+"你乐于设计、美化事物",
+"你喜欢自由表达想法",
+"你欣赏艺术作品",
+"你喜欢创意构思",
+"你乐于写文案、做内容",
+"你喜欢视觉审美相关工作",
+"你乐于尝试新颖表达方式",
+"你喜欢不受刻板规则约束的任务",
+"你擅长用作品传递感受",
+// S社会
+"你乐于帮助他人解决困难",
+"你喜欢与人沟通交流",
+"你愿意辅导、教导别人",
+"你关心他人情绪状态",
+"你喜欢组织互助活动",
+"你乐于倾听别人的烦恼",
+"你愿意提供咨询支持",
+"你喜欢团队帮扶类事务",
+"你乐于协调人际矛盾",
+"你喜欢从事服务他人的工作",
+// E企业
+"你喜欢说服、影响他人",
+"你乐于组织活动带领团队",
+"你喜欢竞争类任务",
+"你愿意策划推广方案",
+"你喜欢管理项目与人",
+"你乐于对外洽谈沟通",
+"你喜欢制定目标推进落地",
+"你乐于争取资源机会",
+"你喜欢带领团队完成目标",
+"你愿意承担决策责任",
+// C常规
+"你喜欢整理资料、归档文件",
+"你乐于核对数据、检查差错",
+"你喜欢清晰固定流程工作",
+"你擅长台账记录、信息登记",
+"你乐于按规范完成任务",
+"你喜欢有序、有条理的事务",
+"你擅长分类整理信息",
+"你乐于执行既定规则",
+"你喜欢重复稳定的工作",
+"你擅长统计与文书工作"
+];
+
+const dimName = {R:"现实型",I:"研究型",A:"艺术型",S:"社会型",E:"企业型",C:"常规型"};
+const dimDesc = {
+  R:{
+    trait:"现实型：擅长动手实操，偏好实物、技术、工具类工作，做事踏实，注重实际成果。",
+    plan:"短期：尝试手工、设备操作、实验实操类活动；中期：学习工程、机电、土木、质检等技能；长期：技术工程师、运维、技工、测绘等方向。"
+  },
+  I:{
+    trait:"研究型：善于思考探究，喜欢分析推理，乐于钻研理论、数据，偏好独立思考。",
+    plan:"短期：多看科普，尝试数据分析；中期：学习科研、统计、编程相关知识；长期：科研、数据分析、研发、学术研究等方向。"
+  },
+  A:{
+    trait:"艺术型：想象力丰富，追求创意美感，讨厌刻板束缚，擅长表达与原创。",
+    plan:"短期：练习绘画、文案、剪辑；中期：学习设计、新媒体、文学创作；长期：设计师、内容创作、策划、艺术相关岗位。"
+  },
+  S:{
+    trait:"社会型：热心友善，擅长共情沟通，乐于帮助他人，适合教育、服务类场景。",
+    plan:"短期：参与志愿、帮扶活动；中期：学习心理学、教育相关知识；长期：教师、社工、心理咨询、人力资源等方向。"
+  },
+  E:{
+    trait:"企业型：自信有号召力，喜欢影响他人，目标感强，适合管理、营销、对外事务。",
+    plan:"短期：尝试活动组织、演讲；中期：学习营销、管理知识；长期：运营、管理、市场、商务等岗位。"
+  },
+  C:{
+    trait:"常规型：细心严谨，遵守规则，擅长文书整理、数据核对，偏爱稳定有序工作。",
+    plan:"短期：练习台账整理、表格统计；中期：学习财务、行政相关技能；长期：会计、行政、档案管理、内勤等岗位。"
+  }
+};
+const dimList = ["R","I","A","S","E","C"];
+
+let current = 0;
+let answers = Array(60).fill(null);
+let score = {R:0,I:0,A:0,S:0,E:0,C:0};
+
+// 页面切换
+function showPage(id){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+function startTest(){
+  current=0;answers.fill(null);score={R:0,I:0,A:0,S:0,E:0,C:0};
+  renderQuestion();
+  showPage("page-question");
+}
+function renderQuestion(){
+  const q = questions[current];
+  document.getElementById("q-index").innerText = current+1;
+  document.getElementById("q-text").innerText = q;
+  document.getElementById("progress").style.width = ((current)/60*100)+"%";
+  const optWrap = document.getElementById("q-options");
+  optWrap.innerHTML="";
+  const opts = [
+    {v:1,t:"非常不符合"},
+    {v:2,t:"不太符合"},
+    {v:3,t:"一般"},
+    {v:4,t:"比较符合"},
+    {v:5,t:"非常符合"},
+  ];
+  opts.forEach(o=>{
+    const div = document.createElement("div");
+    div.className = "option-item "+(answers[current]===o.v?"selected":"");
+    div.innerText = o.t;
+    div.onclick=()=>{
+      answers[current]=o.v;
+      document.querySelectorAll(".option-item").forEach(el=>el.classList.remove("selected"));
+      div.classList.add("selected");
+      document.getElementById("btn-next").disabled=false;
+    }
+    optWrap.appendChild(div);
+  })
+  document.getElementById("btn-next").disabled = answers[current]==null;
+}
+function nextQuestion(){
+  current++;
+  if(current >=60){
+    calcScore();
+    renderResult();
+    showPage("page-result");
+    return;
+  }
+  renderQuestion();
+}
+function calcScore(){
+  answers.forEach((val,idx)=>{
+    const d = dimList[Math.floor(idx/10)];
+    score[d]+=val;
+  })
+}
+function renderResult(){
+  // 核心总结
+  const sorted = [...dimList].sort((a,b)=>score[b]-score[a]);
+  const top3 = sorted.slice(0,3);
+  document.getElementById("result-summary").innerText =
+    `你的主导兴趣类型为：${top3.map(x=>dimName[x]).join("、")}。你的偏好会影响适合的工作环境与任务类型，可结合自身能力参考下面方向规划。`;
+  // 两列得分标签
+  const tagWrap = document.getElementById("score-tags");
+  tagWrap.innerHTML = "";
+  sorted.forEach(d=>{
+    tagWrap.innerHTML += `<span class="tag">${dimName[d]}：${score[d]}分</span>`;
+  })
+  // 维度解读
+  const infoWrap = document.getElementById("dim-info");
+  infoWrap.innerHTML = "";
+  sorted.forEach(d=>{
+    infoWrap.innerHTML += `<div><strong>${dimName[d]}(${score[d]}分)</strong><p>${dimDesc[d].trait}</p><p>${dimDesc[d].plan}</p></div>`
+  })
+  drawHex();
+}
+// 漫画风蓝色六边形（无蛛网，仅轮廓+色块填充）
+function drawHex(){
+  const ctx = document.getElementById("hexChart").getContext("2d");
+  ctx.clearRect(0,0,320,320);
+  const cx=160, cy=160;
+  const maxTotal = 50; //单维度满分 10题×5=50
+  const angles = [];
+  for(let i=0;i<6;i++){
+    const rad = Math.PI/2 + Math.PI*2/6*i;
+    angles.push(rad);
+  }
+  // 外六边形轮廓
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const r = 140;
+    const x = cx + r*Math.cos(angles[i]);
+    const y = cy - r*Math.sin(angles[i]);
+    i===0 ? ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle="#4096ff";
+  ctx.lineWidth=3;
+  ctx.stroke();
+  // 分块填充，蓝色系漫画色块
+  const colors = ["#bae0ff","#94ccff","#70b8ff","#52a6ff","#4096ff","#3388ee"];
+  for(let i=0;i<6;i++){
+    const d = dimList[i];
+    const rate = score[d]/maxTotal;
+    const r = 140 * rate;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    const x1 = cx + r*Math.cos(angles[i]);
+    const y1 = cy - r*Math.sin(angles[i]);
+    const x2 = cx + r*Math.cos(angles[(i+1)%6]);
+    const y2 = cy - r*Math.sin(angles[(i+1)%6]);
+    ctx.lineTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.closePath();
+    ctx.fillStyle=colors[i];
+    ctx.fill();
+    ctx.strokeStyle="#1f5499";
+    ctx.lineWidth=1;
+    ctx.stroke();
+    //文字标注
+    const midRad = (angles[i]+angles[(i+1)%6])/2;
+    const labelR = 155;
+    const lx = cx + labelR*Math.cos(midRad);
+    const ly = cy - labelR*Math.sin(midRad);
+    ctx.fillStyle="#1f5499";
+    ctx.font="bold 14px sans-serif";
+    ctx.textAlign="center";
+    ctx.fillText(dimName[d],lx,ly);
+  }
+}
+function resetTest(){
+  showPage("page-home");
+}
+</script>
+</body>
+</html>
